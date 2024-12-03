@@ -1,0 +1,3 @@
+dockerCompose/
+dbServer/db_data/
+dbServer/init.sql
