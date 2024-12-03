@@ -14,7 +14,7 @@ import (
 
 func check(argErr error) {
 	if argErr != nil {
-		log.Fatalf("Error: %v", argErr)
+		log.Printf("Error: %v", argErr)
 	}
 }
 

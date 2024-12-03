@@ -105,7 +105,7 @@ func handlePostRequest(c *gin.Context) {
 	}
 
 	// Resource Allocation 정보 요청
-	ackBody := ReqResourceAllocInfo(BASE_URL, requestData.Yaml) // 디코딩하지 않고 원본 YAML 그대로 전달
+	ackBody := ReqResourceAllocInfo(BASE_URL, requestData.Yaml)
 
 	// 최종 워크로드 YAML 생성
 	finalYaml, clusterValue := MadeFinalWorkloadYAML(ackBody, requestData.Yaml)
@@ -175,14 +175,14 @@ func ReqResourceAllocInfo(argAddr string, encodedYaml string) ys.RespResource {
 	data, err := base64.StdEncoding.DecodeString(encodedYaml)
 	if err != nil {
 		log.Printf("Failed to decode base64 data: %s", err)
-		return ys.RespResource{} // 에러 처리
+		return ys.RespResource{}
 	}
 
 	var workflow ys.Workflow
 	err = yaml.Unmarshal(data, &workflow)
 	if err != nil {
 		log.Printf("Failed to unmarshal YAML data: %s", err)
-		return ys.RespResource{} // 에러 처리
+		return ys.RespResource{}
 	}
 
 	// 요청할 리소스 JSON 객체 생성
