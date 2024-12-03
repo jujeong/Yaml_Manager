@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yaml-manager-deployment
+  namespace: keti-product
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: yaml-manager
+  template:
+    metadata:
+      labels:
+        app: yaml-manager
+    spec:
+      containers:
+      - name: yaml-manager
+        image: jujeong0108/yaml_manager:1.3
+        ports:
+        - containerPort: 8080
+        env:
+        - name: DB_HOST
+          value: "10.10.30.60"
+        - name: DB_PORT
+          value: "30122"        
+        - name: DB_USER
+          value: "root"
+        - name: DB_PASSWORD
+          value: "rootpassword"
+        - name: DB_NAME
+          value: "ketidatabase"
+        - name: KWARE_IP
+          value: "10.10.30.60"
+        - name: KWARE_PORT
+          value: "30008"
+        - name: KWARE_PATH
+          value: "/interface/api/v1/do/schedule/nodeselect"
+        - name: WRAPPER_IP
+          value: "10.10.30.60"
+        - name: WRAPPER_PORT
+          value: "30123"
+        - name: WRAPPER_PATH
+          value: "/api/v1/strato"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yaml-manager-service
+  namespace: keti-product
+spec:
+  selector:
+    app: yaml-manager
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+    nodePort: 30121
+  type: NodePort

@@ -20,10 +20,8 @@ import (
 
 var BASE_URL = "http://" + os.Getenv("KWARE_IP") + ":" + os.Getenv("KWARE_PORT") + os.Getenv("KWARE_PATH")
 
-// 워크로드 정보를 나타내는 구조체 정의
-
 // GET 요청 처리 함수
-func handleGetRequest(c *gin.Context) {
+func handleGetWorkloadinfoRequest(c *gin.Context) {
 	var results []ys.WorkloadInfo // 구조체를 사용하여 결과 슬라이스 정의
 
 	query := "SELECT workload_name, yaml, metadata, created_timestamp FROM workload_info"
@@ -51,6 +49,33 @@ func handleGetRequest(c *gin.Context) {
 	c.JSON(200, response)
 }
 
+func handleGetStratoRequest(c *gin.Context) {
+	var results []ys.Strato
+
+	query := "SELECT mlid, yaml, data FROM strato"
+	rows, err := db.Query(query)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Database query failed"})
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var result ys.Strato
+		if err := rows.Scan(&result.MlId, &result.YAML, &result.Data); err != nil {
+			c.JSON(500, gin.H{"error": "Row scan failed"})
+			return
+		}
+		results = append(results, result) // 동일한 구조체 타입을 사용
+	}
+
+	// 응답 구조 수정
+	response := gin.H{
+		"respond": results,
+	}
+
+	c.JSON(200, response)
+}
 // POST 요청 처리 함수
 func handlePostRequest(c *gin.Context) {
 	var requestData ys.RequestData

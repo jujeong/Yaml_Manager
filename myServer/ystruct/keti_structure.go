@@ -7,6 +7,12 @@ type WorkloadInfo struct {
 	CreatedTimestamp string `json:"createdtimestamp"`
 }
 
+type Strato struct {
+	MlId string `json:"mlid"`
+	YAML string `json:"yaml"`
+	Data string `json:"data"`
+}
+
 // API 요청에 사용할 데이터 구조체
 type RequestData struct {
 	Yaml      string                 `json:"yaml"`

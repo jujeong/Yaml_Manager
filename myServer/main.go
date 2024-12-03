@@ -26,7 +26,8 @@ func main() {
 		log.Fatal("Database connection failed:", err)
 	}
 	// GET 엔드포인트 정의
-	r.GET("/workload_info", handleGetRequest)
+	r.GET("/workload_info", handleGetWorkloadinfoRequest)
+	r.GET("/strato", handleGetStratoRequest)
 	// POST 엔드포인트 정의
 	r.POST("/submit", handlePostRequest)
 	// 서버 실행
