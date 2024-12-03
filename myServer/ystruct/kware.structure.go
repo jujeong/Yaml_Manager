@@ -14,14 +14,15 @@ type Request struct {
 }
 
 type Attribute struct {
-	WorkloadType     string  `json:"workloadType,omitempty" yaml:"workloadType,omitempty"`
-	IsCronJob        bool    `json:"isCronJob,omitempty" yaml:"isCronJob,omitempty"`
-	DevOpsType       string  `json:"devOpsType,omitempty" yaml:"devOpsType,omitempty"`
-	CudaVersion      float64 `json:"cudaVersion,omitempty" yaml:"cudaVersion,omitempty"`
-	GPUDriverVersion float64 `json:"gpuDriverVersion,omitempty" yaml:"gpuDriverVersion,omitempty"`
-	WorkloadFeature  string  `json:"workloadFeature,omitempty" yaml:"workloadFeature,omitempty"`
-	UserID           string  `json:"userId,omitempty" yaml:"userId,omitempty"`
-	Yaml             string  `json:"yaml,omitempty" yaml:"yaml,omitempty"`
+	WorkloadType     string      `json:"workloadType,omitempty" yaml:"workloadType,omitempty"`
+	IsCronJob        bool        `json:"isCronJob,omitempty" yaml:"isCronJob,omitempty"`
+	DevOpsType       string      `json:"devOpsType,omitempty" yaml:"devOpsType,omitempty"`
+	CudaVersion      float64     `json:"cudaVersion,omitempty" yaml:"cudaVersion,omitempty"`
+	GPUDriverVersion float64     `json:"gpuDriverVersion,omitempty" yaml:"gpuDriverVersion,omitempty"`
+	WorkloadFeature  string      `json:"workloadFeature,omitempty" yaml:"workloadFeature,omitempty"`
+	UserID           string      `json:"userId,omitempty" yaml:"userId,omitempty"`
+	Yaml             string      `json:"yaml,omitempty" yaml:"yaml,omitempty"`
+	Dag              interface{} `json:"dag,omitempty" yaml:"dag,omitempty"`
 }
 
 type RespResource struct {

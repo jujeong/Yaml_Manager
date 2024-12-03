@@ -76,6 +76,7 @@ func handleGetStratoRequest(c *gin.Context) {
 
 	c.JSON(200, response)
 }
+
 // POST 요청 처리 함수
 func handlePostRequest(c *gin.Context) {
 	var requestData ys.RequestData
@@ -115,6 +116,7 @@ func handlePostRequest(c *gin.Context) {
 	}
 	// finalYaml을 Base64로 인코딩
 	finalYamlBase64 := base64.StdEncoding.EncodeToString(finalYamlYAML)
+	// cluster 값과 인코딩된 값을 Yaml Wrapper로 전송
 	// POST 요청 보내기
 	err = sendPostRequest(clusterValue, finalYamlBase64)
 	if err != nil {
@@ -185,18 +187,70 @@ func ReqResourceAllocInfo(argAddr string, encodedYaml string) ys.RespResource {
 
 	// 요청할 리소스 JSON 객체 생성
 	reqJson := ys.ReqResource{}
-
-	uuid := "dmkim" // 사용자 ID 또는 UUID 설정
+	uuid := "dmkim"
 	currentTime := time.Now()
 	nowTime := currentTime.Format("2006-01-02 15:04:05")
 
-	// reqJson 구성
+	// 기본 정보 설정
 	reqJson.Version = "0.12"
 	reqJson.Request.Name = workflow.Metadata.GenerateName
 	reqJson.Request.ID = uuid
 	reqJson.Request.Date = nowTime
 
-	// 템플릿을 기반으로 컨테이너 정보를 추가
+	// task의 의존성 그래프 구축
+	taskOrders := make(map[string]int)
+	inDegree := make(map[string]int)
+	dependencyGraph := make(map[string][]string)
+
+	// 초기화: 의존성, in-degree, 그래프 초기화
+	for _, template := range workflow.Spec.Templates {
+		if template.DAG != nil {
+			for _, task := range template.DAG.Tasks {
+				taskOrders[task.Name] = 0
+				inDegree[task.Name] = 0
+				dependencyGraph[task.Name] = []string{}
+			}
+		}
+	}
+
+	// 의존성 그래프 및 in-degree 계산
+	for _, template := range workflow.Spec.Templates {
+		if template.DAG != nil {
+			for _, task := range template.DAG.Tasks {
+				for _, dep := range task.Dependencies {
+					dependencyGraph[dep] = append(dependencyGraph[dep], task.Name)
+					inDegree[task.Name]++
+				}
+			}
+		}
+	}
+
+	// 위상 정렬(Topological Sorting) 수행
+	queue := []string{}
+	for task, degree := range inDegree {
+		if degree == 0 {
+			queue = append(queue, task)
+			taskOrders[task] = 1 // 의존성이 없는 task는 order 1
+		}
+	}
+
+	// 위상 정렬을 이용해 의존성 처리
+	for len(queue) > 0 {
+		currentTask := queue[0]
+		queue = queue[1:]
+
+		// 현재 task를 의존하는 task들의 in-degree 감소 및 처리
+		for _, dependentTask := range dependencyGraph[currentTask] {
+			inDegree[dependentTask]--
+			if inDegree[dependentTask] == 0 {
+				// 부모 task의 order 값 + 1
+				taskOrders[dependentTask] = taskOrders[currentTask] + 1
+				queue = append(queue, dependentTask)
+			}
+		}
+	}
+
+	// 컨테이너 정보에 order 값 추가
 	for _, value := range workflow.Spec.Templates {
 		if value.Container == nil {
 			continue
@@ -218,6 +272,15 @@ func ReqResourceAllocInfo(argAddr string, encodedYaml string) ys.RespResource {
 					},
 				},
 			}
+			tmpContainer.Attribute.MaxReplicas = 500
+			tmpContainer.Attribute.TotalSize = 500
+			tmpContainer.Attribute.PredictedExecutionTime = 600
+
+			// task의 order 값을 설정
+			if order, exists := taskOrders[value.Name]; exists {
+				tmpContainer.Attribute.Order = order
+			}
+
 			reqJson.Request.Containers = append(reqJson.Request.Containers, tmpContainer)
 		}
 	}
@@ -228,18 +291,16 @@ func ReqResourceAllocInfo(argAddr string, encodedYaml string) ys.RespResource {
 	reqJson.Request.Attribute.DevOpsType = "DEV"
 	reqJson.Request.Attribute.GPUDriverVersion = 12.34
 	reqJson.Request.Attribute.CudaVersion = 342.12
-	reqJson.Request.Attribute.WorkloadFeature = "test" // 예시
+	reqJson.Request.Attribute.WorkloadFeature = "test"
 	reqJson.Request.Attribute.UserID = uuid
-	reqJson.Request.Attribute.Yaml = base64.StdEncoding.EncodeToString(data) // 다시 인코딩하여 포함
+	reqJson.Request.Attribute.Yaml = base64.StdEncoding.EncodeToString(data)
 
 	// 리소스 요청 전송
 	var ackBody ys.RespResource
 	ack, body := SEND_REST_DATA(argAddr, reqJson)
-	// POST 요청에 대한 상태 코드와 본문을 로깅
 	log.Printf("[ReqResource] Status code: %d, Response body: %s", ack.StatusCode, body)
 
 	if ack.StatusCode == http.StatusOK {
-		// JSON 데이터를 YAML로 변환
 		var jsonResponse map[string]interface{}
 		err = json.Unmarshal([]byte(body), &jsonResponse)
 		if err != nil {
@@ -253,17 +314,14 @@ func ReqResourceAllocInfo(argAddr string, encodedYaml string) ys.RespResource {
 			return ackBody
 		}
 
-		// 변환된 YAML 데이터 출력 (원하는 방식으로 사용 가능)
 		log.Printf("Converted YAML:\n%s", string(yamlData))
-
-		err = yaml.Unmarshal(yamlData, &ackBody) // YAML을 ackBody에 unmarshal
+		err = yaml.Unmarshal(yamlData, &ackBody)
 		if err != nil {
 			log.Printf("Failed to unmarshal YAML data to ackBody: %s", err)
 		}
 	} else {
 		fmt.Printf("[ReqResource] Request failed with status: %s\n", ack.Status)
 	}
-
 	return ackBody
 }
 
