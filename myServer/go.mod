@@ -2,6 +2,8 @@ module app
 
 go 1.20
 
+replace main/ystruct => ./ystruct
+
 require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-sql-driver/mysql v1.8.1
@@ -36,4 +38,15 @@ require (
 	google.golang.org/protobuf v1.34.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+)
+
+require (
+	gopkg.in/yaml.v2 v2.4.0
+	main/ystruct v0.0.0-00010101000000-000000000000
+)
+
+require (
+	github.com/kr/pretty v0.3.1 // indirect
+	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
+	sigs.k8s.io/yaml v1.4.0
 )
