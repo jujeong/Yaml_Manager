@@ -26,7 +26,8 @@ func main() {
 	}
 	r.GET("/workload_info", handleGetWorkloadinfoRequest)
 	r.GET("/strato", handleGetStratoRequest)
-	r.POST("/submit", handlePostRequest)
+	r.POST("/submit", handleSubmitRequest)
+	r.POST("/submit_resource", handleSubmitResourceRequest)
 
 	r.Run("0.0.0.0:8080")
 }

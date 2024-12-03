@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -78,7 +79,7 @@ func handleGetStratoRequest(c *gin.Context) {
 }
 
 // POST 요청 처리 함수
-func handlePostRequest(c *gin.Context) {
+func handleSubmitRequest(c *gin.Context) {
 	var requestData ys.RequestData
 
 	// 요청 데이터 바인딩
@@ -134,6 +135,139 @@ func handlePostRequest(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
 }
+
+// POST 요청 처리 함수
+// POST 요청 처리 함수
+func handleSubmitResourceRequest(c *gin.Context) {
+	var requestResourceData ys.RequestResourceData
+	log.Print("cp0")
+	// 요청 데이터 바인딩
+	if err := c.ShouldBindJSON(&requestResourceData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	log.Print("cp1")
+	// 1. name 값으로 가장 최신 created_timestamp 값을 갖는 yaml 찾기
+	var base64Yaml string
+	err := db.QueryRow(`
+        SELECT yaml 
+        FROM workload_info 
+        WHERE workload_name = ? 
+        ORDER BY created_timestamp DESC 
+        LIMIT 1`, requestResourceData.Name).Scan(&base64Yaml)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Workload not found"})
+		return
+	}
+	// 3. 기존 metadata 조회
+	var existingMetadata string
+	query := "SELECT metadata FROM workload_info WHERE workload_name = ? ORDER BY created_timestamp DESC LIMIT 1"
+	err = db.QueryRow(query, requestResourceData.Name).Scan(&existingMetadata)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			existingMetadata = "{}" // metadata가 없을 경우 빈 JSON 객체로 설정
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	log.Print(base64Yaml) ///////////////////////
+	// 2. YAML 데이터 디코딩 (Base64 -> YAML 문자열)
+	yamlData, err := base64.StdEncoding.DecodeString(base64Yaml)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode YAML"})
+		return
+	}
+
+	// 3. YAML 데이터를 Map 형식으로 변환하여 편집이 용이하게 함
+	var yamlMap map[string]interface{}
+	err = yaml.Unmarshal(yamlData, &yamlMap)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse YAML"})
+		return
+	}
+
+	// // 3.1. 디버깅을 위한 로그 출력 (yamlMap 구조 확인)
+	// log.Printf("Parsed YAML Map: %+v", yamlMap)
+
+	// 4. JSON의 containers 값으로 YAML의 자원 값 갱신
+	// yamlMap["spec"]을 map[interface{}]interface{}로 처리한 뒤, 이를 map[string]interface{}로 변환
+	spec, ok := yamlMap["spec"].(map[interface{}]interface{})
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "'spec' not found or has incorrect type in YAML"})
+		return
+	}
+
+	// "templates"를 map[interface{}]interface{}에서 []interface{}로 변환
+	templatesInterface, ok := spec["templates"].([]interface{})
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "'templates' not found or has incorrect type in YAML"})
+		return
+	}
+
+	for i, container := range requestResourceData.Containers {
+		// 각 template의 container 자원 값 갱신
+		template, ok := templatesInterface[i].(map[interface{}]interface{})
+		if !ok {
+			continue // 혹시 순서가 맞지 않으면 넘어감
+		}
+
+		containerMap, ok := template["container"].(map[interface{}]interface{})
+		if !ok {
+			continue // 혹시 container 정보가 없으면 넘어감
+		}
+
+		resources, ok := containerMap["resources"].(map[interface{}]interface{})
+		if !ok {
+			continue // 혹시 resources가 없으면 넘어감
+		}
+
+		// 요청된 자원 값 갱신
+		resources["requests"] = map[string]string{
+			"cpu":    container.Resources.Requests.CPU,
+			"memory": container.Resources.Requests.Memory,
+		}
+		resources["limits"] = map[string]string{
+			"cpu":    container.Resources.Limits.CPU,
+			"memory": container.Resources.Limits.Memory,
+			"gpu":    container.Resources.Limits.GPU,
+		}
+	}
+	log.Print("cp2")
+	// 5. 수정된 YAML을 다시 인코딩하여 Base64로 변환
+	modifiedYaml, err := yaml.Marshal(yamlMap)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to marshal modified YAML"})
+		return
+	}
+	finalYamlBase64 := base64.StdEncoding.EncodeToString(modifiedYaml)
+	log.Print("cp3")
+	// 6. 수정된 YAML을 기반으로 POST 요청
+	clusterValue := "Cluster_value" // 필요시 적절히 할당
+	err = sendPostRequest(clusterValue, finalYamlBase64)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send POST request"})
+		return
+	}
+	log.Print("cp4")
+	// 9. 요청 데이터 DB에 저장
+	loc, err := time.LoadLocation("Asia/Seoul")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load location"})
+		return
+	}
+	_, err = db.Exec("INSERT INTO workload_info (workload_name, yaml, metadata, created_timestamp) VALUES (?, ?, ?, ?)",
+		requestResourceData.Name, finalYamlBase64, existingMetadata, time.Now().In(loc).Format("2006-01-02 15:04:05"))
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
+}
+
+///////////////////////////////////////////////////////////////
 
 func sendPostRequest(clusterValue string, finalYamlBase64 string) error {
 	wrapperIp := os.Getenv("WRAPPER_IP")

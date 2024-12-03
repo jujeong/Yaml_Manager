@@ -13,6 +13,25 @@ type Strato struct {
 	Data string `json:"data"`
 }
 
+// RequestResourceData 구조체 정의
+type RequestResourceData struct {
+	Name       string              `json:"name"`
+	Containers []ResourceContainer `json:"containers"`
+	Timestamp  string              `json:"timestamp"`
+}
+
+// ResourceContainer 구조체 정의
+type ResourceContainer struct {
+	Name      string   `json:"name"`
+	Resources Resource `json:"resources"`
+}
+
+// ResourceDetails 구조체 정의
+type Resource struct {
+	Requests ResourceDetails `json:"requests"`
+	Limits   ResourceDetails `json:"limits"`
+}
+
 // API 요청에 사용할 데이터 구조체
 type RequestData struct {
 	Yaml      string                 `json:"yaml"`
