@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -24,6 +25,12 @@ func main() {
 	if err != nil {
 		log.Fatal("Database connection failed:", err)
 	}
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},                      // 허용할 도메인
+		AllowMethods:     []string{"GET", "POST", "OPTIONS"}, // 허용할 HTTP 메서드
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "*"},
+		AllowCredentials: true, // 쿠키 허용 여부
+	}))
 	r.GET("/workload_info", handleGetWorkloadinfoRequest)
 	r.GET("/strato", handleGetStratoRequest)
 	r.POST("/submit", handleSubmitRequest)
