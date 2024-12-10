@@ -409,7 +409,6 @@ func ReqResourceAllocInfo(argAddr string, encodedYaml string) ys.RespResource {
 			tmpContainer.Attribute.MaxReplicas = 500
 			tmpContainer.Attribute.TotalSize = 500
 			tmpContainer.Attribute.PredictedExecutionTime = 600
-
 			// task의 order 값을 설정
 			if order, exists := taskOrders[value.Name]; exists {
 				tmpContainer.Attribute.Order = order
