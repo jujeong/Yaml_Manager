@@ -137,16 +137,14 @@ func handleSubmitRequest(c *gin.Context) {
 }
 
 // POST 요청 처리 함수
-// POST 요청 처리 함수
 func handleSubmitResourceRequest(c *gin.Context) {
 	var requestResourceData ys.RequestResourceData
-	log.Print("cp0")
+
 	// 요청 데이터 바인딩
 	if err := c.ShouldBindJSON(&requestResourceData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	log.Print("cp1")
 	// 1. name 값으로 가장 최신 created_timestamp 값을 갖는 yaml 찾기
 	var base64Yaml string
 	err := db.QueryRow(`
@@ -210,31 +208,47 @@ func handleSubmitResourceRequest(c *gin.Context) {
 		// 각 template의 container 자원 값 갱신
 		template, ok := templatesInterface[i].(map[interface{}]interface{})
 		if !ok {
-			continue // 혹시 순서가 맞지 않으면 넘어감
+			continue // 순서가 맞지 않으면 넘어감
 		}
 
 		containerMap, ok := template["container"].(map[interface{}]interface{})
 		if !ok {
-			continue // 혹시 container 정보가 없으면 넘어감
+			continue // container 정보가 없으면 넘어감
 		}
 
 		resources, ok := containerMap["resources"].(map[interface{}]interface{})
 		if !ok {
-			continue // 혹시 resources가 없으면 넘어감
+			continue // resources가 없으면 넘어감
 		}
 
 		// 요청된 자원 값 갱신
 		resources["requests"] = map[string]string{
-			"cpu":    container.Resources.Requests.CPU,
-			"memory": container.Resources.Requests.Memory,
+			"cpu":            container.Resources.Requests.CPU,
+			"memory":         container.Resources.Requests.Memory,
+			"gpu":            container.Resources.Requests.GPU,
+			"nvidia.com/gpu": container.Resources.Requests.NvidiaGPU,
 		}
 		resources["limits"] = map[string]string{
-			"cpu":    container.Resources.Limits.CPU,
-			"memory": container.Resources.Limits.Memory,
-			"gpu":    container.Resources.Limits.GPU,
+			"cpu":            container.Resources.Limits.CPU,
+			"memory":         container.Resources.Limits.Memory,
+			"gpu":            container.Resources.Limits.GPU,
+			"nvidia.com/gpu": container.Resources.Limits.NvidiaGPU,
+		}
+
+		// 요청 값이 비어 있으면 해당 항목 삭제
+		for key, value := range resources["requests"].(map[string]string) {
+			if value == "" {
+				delete(resources["requests"].(map[string]string), key)
+			}
+		}
+
+		// 제한 값이 비어 있으면 해당 항목 삭제
+		for key, value := range resources["limits"].(map[string]string) {
+			if value == "" {
+				delete(resources["limits"].(map[string]string), key)
+			}
 		}
 	}
-	log.Print("cp2")
 	// 5. 수정된 YAML을 다시 인코딩하여 Base64로 변환
 	modifiedYaml, err := yaml.Marshal(yamlMap)
 	if err != nil {
@@ -242,15 +256,13 @@ func handleSubmitResourceRequest(c *gin.Context) {
 		return
 	}
 	finalYamlBase64 := base64.StdEncoding.EncodeToString(modifiedYaml)
-	log.Print("cp3")
 	// 6. 수정된 YAML을 기반으로 POST 요청
-	clusterValue := "Cluster_value" // 필요시 적절히 할당
+	clusterValue := "1" // 필요시 적절히 할당
 	err = sendPostRequest(clusterValue, finalYamlBase64)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send POST request"})
 		return
 	}
-	log.Print("cp4")
 	// 9. 요청 데이터 DB에 저장
 	loc, err := time.LoadLocation("Asia/Seoul")
 	if err != nil {
@@ -274,6 +286,8 @@ func sendPostRequest(clusterValue string, finalYamlBase64 string) error {
 	wrapperPort := os.Getenv("WRAPPER_PORT")
 	wrapperPath := os.Getenv("WRAPPER_PATH")
 	address := "http://" + wrapperIp + ":" + wrapperPort + wrapperPath
+
+	// 요청 데이터 생성
 	postData := map[string]string{
 		"cluster": clusterValue,
 		"yaml":    finalYamlBase64,
@@ -283,24 +297,36 @@ func sendPostRequest(clusterValue string, finalYamlBase64 string) error {
 		return fmt.Errorf("failed to create JSON for POST request: %v", err)
 	}
 
+	// POST 요청 보내기
 	resp, err := http.Post(address, "application/json", bytes.NewBuffer(postJSON))
 	if err != nil {
 		return fmt.Errorf("failed to send POST request: %v", err)
 	}
 	defer resp.Body.Close()
 
-	// 응답 본문을 읽고 로그로 출력
+	// Status Code 출력
+	log.Printf("Response Status Code: %d", resp.StatusCode)
+
+	// Headers 출력
+	for key, value := range resp.Header {
+		log.Printf("Header: %s=%s", key, value)
+	}
+
+	// Body 읽고 출력
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read response body: %v", err)
 	}
-	log.Printf("Response Body: %s", bodyBytes)
+	log.Printf("Response Body: %s", string(bodyBytes))
 
+	// 상태 코드 확인
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to submit data, status code: %d", resp.StatusCode)
+		return fmt.Errorf("request failed with status code: %d", resp.StatusCode)
 	}
+
 	return nil
 }
+
 
 func ReqResourceAllocInfo(argAddr string, encodedYaml string) ys.RespResource {
 	var err error
@@ -409,6 +435,7 @@ func ReqResourceAllocInfo(argAddr string, encodedYaml string) ys.RespResource {
 			tmpContainer.Attribute.MaxReplicas = 500
 			tmpContainer.Attribute.TotalSize = 500
 			tmpContainer.Attribute.PredictedExecutionTime = 600
+
 			// task의 order 값을 설정
 			if order, exists := taskOrders[value.Name]; exists {
 				tmpContainer.Attribute.Order = order
