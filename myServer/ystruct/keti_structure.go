@@ -32,6 +32,20 @@ type Resource struct {
 	Limits   ResourceDetails `json:"limits"`
 }
 
+// // ResourceRequests 구조체 정의
+// type ResourceRequests struct {
+// 	CPU    string `json:"cpu"`
+// 	Memory string `json:"memory"`
+// 	GPU    string `json:"gpu,omitempty"` // GPU는 선택적으로 제공될 수 있음
+// }
+
+// // ResourceLimits 구조체 정의
+// type ResourceLimits struct {
+// 	CPU    string `json:"cpu"`
+// 	Memory string `json:"memory"`
+// 	GPU    string `json:"gpu,omitempty"` // GPU는 선택적으로 제공될 수 있음
+// }
+
 // API 요청에 사용할 데이터 구조체
 type RequestData struct {
 	Yaml      string                 `json:"yaml"`
